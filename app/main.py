@@ -16,7 +16,7 @@ class Post(BaseModel):
 
 while True:
     try:
-        con = psycopg2.connect(host="localhost", database="fastapi", port=5433,
+        con = psycopg2.connect(host="localhost", database="socialMedia", port=5433,
                             user="postgres", password="root", cursor_factory=RealDictCursor)
         cursor = con.cursor()
 
@@ -63,30 +63,39 @@ def read_root():
     return {"message" : "Welcome to my api"}
 
 
-
+# get all the post
 @app.get("/posts")
 def get_posts():
-    cursor.execute(""" SELECT * FROM products""")
+    cursor.execute(""" SELECT * FROM posts""")
     posts = cursor.fetchall()
     print(posts)
     return {"data": posts}
 
+
+# create a new post
 @app.post("/posts", status_code=status.HTTP_201_CREATED)
 def create_posts(newPost: Post ):
-    post_dict = newPost.model_dump()
-    post_dict["id"] = randrange(0, 1000000)
-    my_posts.append(post_dict)
-    return {"data" : post_dict}
+    cursor.execute(""" INSERT INTO posts (title, content, published) VALUES (%s, %s, %s) RETURNING * """, 
+                   (newPost.title, newPost.content, newPost.published))
+    postCreated = cursor.fetchone()
+    con.commit()
+    return {"data" : postCreated}
+
+# get one post by id
 
 @app.get("/posts/{id}")
 def getPost(id: int, respone: Response):
-    post = findPost(id)
+    cursor.execute(""" SELECT * FROM posts WHERE id = %s """, (str(id), ))
+    post = cursor.fetchone()
+    print(post)
     if not post:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, 
                             detail=f"the post with id: {id} not found")
 
     return {"data": post}
 
+
+# delete a post
 
 @app.delete("/posts/{id}", status_code=status.HTTP_204_NO_CONTENT)
 def deletePost(id: int):
@@ -97,6 +106,7 @@ def deletePost(id: int):
     my_posts.pop(index)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
+# update a post
 
 @app.put("/posts/{id}")
 def updatePosts(id: int, post: Post):
