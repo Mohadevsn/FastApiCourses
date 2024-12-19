@@ -28,35 +28,6 @@ while True:
         print("error :", error)
         time.sleep(2)
     
-    
-
-my_posts = [
-    {
-        "title": "Post 1",
-        "content": "post 1 content",
-        "id": 123
-    },
-    {
-        "title": "Favorite Fruits",
-        "content": "I like orange",
-        "id": 125
-    }
-]
-
-def findIndexPost(id):
-    for i, p in enumerate(my_posts):
-        if p["id"] == id:
-            print(i)
-            return i
-    return None
-
-def findPost(id):
-    for p in my_posts:
-        if p["id"] == id :
-            print(p)
-            return p
-
-
 
 @app.get("/")
 def read_root():
@@ -68,7 +39,6 @@ def read_root():
 def get_posts():
     cursor.execute(""" SELECT * FROM posts""")
     posts = cursor.fetchall()
-    print(posts)
     return {"data": posts}
 
 
@@ -99,24 +69,32 @@ def getPost(id: int, respone: Response):
 
 @app.delete("/posts/{id}", status_code=status.HTTP_204_NO_CONTENT)
 def deletePost(id: int):
-    index = findIndexPost(id)
-    if index is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, 
-                            detail={"message": "Post not found"})
-    my_posts.pop(index)
+    #  find if the post exist 
+    cursor.execute(""" SELECT * from posts WHERE id = %s """, (str(id),))
+    existedPost = cursor.fetchone()
+
+    if existedPost is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail={"message": "No post found for this id"})
+    
+    # starting the deletion
+    cursor.execute(""" DELETE FROM posts WHERE id = %s """, (str(id), ))
+    con.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 # update a post
 
 @app.put("/posts/{id}")
 def updatePosts(id: int, post: Post):
-    postIndex = findIndexPost(id)  # Utiliser seulement findIndexPost(id)
-    if postIndex is None:
+
+    cursor.execute(""" UPDATE posts SET title = %s, content = %s, published = %s, rating = %s WHERE id = %s RETURNING * """,
+                   (post.title, post.content, post.published, post.rating, str(id), ))
+    updatedPost = cursor.fetchone()
+
+    if updatedPost is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail={"message": "No post found for update"})
+    con.commit()
 
-    postDict = post.model_dump()  # Convertir l'objet Pydantic en dict
-    postDict["id"] = id  # Maintenir l'ID existant
-    my_posts[postIndex] = postDict  # Mettre à jour le post dans la liste
-    return {"data": postDict}
+    return {"updated Post": updatedPost}
     
